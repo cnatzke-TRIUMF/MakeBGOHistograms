@@ -6,7 +6,6 @@ suppressor shields.
 ## Table of Contents
   * [Installation](#installation)
   * [Running MakeBGOHistograms](#running-makebgohistograms)
-      - [Dump Crate/Channel Information](#dump-crate-information)
   * [Helper scripts](#helper-scripts)
     + [Compile.sh](#compilesh)
 
@@ -27,7 +26,8 @@ The general form of input is:
 ```
 ./MakeBGOHistograms analysis_tree calibration_file
 ```
-where 
+
+#### Parameters
 ```
 analysis_tree     The unpacked analysis tree containing 137Cs source data
 calibration_file  GRIFFIN calibration file
@@ -43,4 +43,7 @@ Included is a simple (very simple) bash script to make compiling easier.
 
 ### Compile.sh
 This script compiles the main code.
+```
+./Compile.sh 
+```
 
