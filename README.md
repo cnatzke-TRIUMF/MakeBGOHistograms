@@ -24,16 +24,18 @@ git clone https://github.com/cnatzke-TRIUMF/MakeBGOHistograms.git
 # Running MakeBGOHistograms
 The general form of input is:
 ```
-./MakeBGOHistograms analysis_tree calibration_file
+./MakeBGOHistograms analysis_tree calibration_file [out_file_name]
 ```
 
-#### Parameters
+##### Parameters
 ```
 analysis_tree     The unpacked analysis tree containing 137Cs source data
 calibration_file  GRIFFIN calibration file
+out_file_name     optional, Name of output file
+                  default: outFile.root
 ```
 
-#### Outputs
+##### Outputs
 ```
 outFile.root   ROOT file containing BGO and HPGe histograms 
 ```
