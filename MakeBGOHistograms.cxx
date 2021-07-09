@@ -8,6 +8,7 @@
 #include "TChain.h"
 #include "TTree.h"
 
+#include "TTigress.h"
 #include "TGriffin.h"
 #include "TGriffinBgo.h"
 #include "TGRSIOptions.h"
@@ -17,132 +18,158 @@
 using namespace std;
 
 void GenerateHistograms(const char* inFile, const char* calFile, const char* outFile){
-   Double_t nBinsX = 75; 
-   Double_t minX = 0;
-   Double_t maxX = 600;
+  Double_t nBinsX = 75; 
+  Double_t minX = 0;
+  Double_t maxX = 600;
    
-   Double_t nBinsY = 64; 
-   Double_t minY = 0;
-   Double_t maxY = 1024;
+  Double_t nBinsY = 64; 
+  Double_t minY = 0;
+  Double_t maxY = 1024;
    
-   TList *list = new TList;
+  TList *list = new TList;
 
-   // setting up list of gammas singles histograms
-   TH2F *gamma_singles[64][5];
-   TH2D *griffinBgoHP = new TH2D("griffinBgoHP", "Griffin vs Bgo Hit Pattern; BGO; GRIFFIN", 325, 0, 325, 64, 0, 64);
-   char hName[64];
-   for (int i = 0; i < 64; i++){
-      for (int j = 0; j < 5; j++){
-         int k = 1 + i/4;
-         sprintf(hName, "h_%d_%d_%d", k, i, j);
-         gamma_singles[i][j] = new TH2F(hName, Form("Position %1.1i BGO %1.1d", i, j), nBinsX, minX, maxX, nBinsY, minY, maxY);
-      }
-   }
+  // setting up list of gammas singles histograms
+  TH2F *gamma_singles[64][5];
+  TH2D *GeBgoHP = new TH2D("GeBgoHP", "Ge vs Bgo Hit Pattern", 325, 0, 325, 64, 0, 64);
+  char hName[64];
+  for (int i = 0; i < 64; i++){
+    for (int j = 0; j < 5; j++){
+      int k = 1 + i/4;
+      sprintf(hName, "h_%d_%d_%d", k, i, j);
+      gamma_singles[i][j] = new TH2F(hName, Form("Position %1.1i BGO %1.1d", i, j), nBinsX, minX, maxX, nBinsY, minY, maxY);
+    }
+  }
 
-   TFile * inputFile = new TFile(inFile, "READ");
-   if (!inputFile->IsOpen()){
-      cout << inputFile << "cannot be opened. Aborting" << endl;
-      return;
-   }
+  TFile * inputFile = new TFile(inFile, "READ");
+  if (!inputFile->IsOpen()){
+    cout << inputFile << "cannot be opened. Aborting" << endl;
+    return;
+  }
 
-   // preparing the chain
-   TChain* dataChain = (TChain*) inputFile->Get("AnalysisTree");
-   cout << dataChain->GetNtrees() + 1 << " tree(s) found." << endl; // I think it counts from 0 i.e. 0 = 1?
-   Int_t nEntries = dataChain->GetEntries();
+  // preparing the chain
+  TChain* AnalysisTree = (TChain*) inputFile->Get("AnalysisTree");
+  printf("%i tree files, details:\n", AnalysisTree->GetNtrees());
+  Int_t nEntries = AnalysisTree->GetEntries();
 
-   cout << "Reading CalFile: " << calFile << endl;
-   TChannel::ReadCalFile(calFile);
+  printf("Reading calibration file: %s\n", calFile);
+  TChannel::ReadCalFile(calFile);
 
-   TGriffin* fGrif = NULL;
-   TGriffinBgo* fGriffinBgo = NULL;
-   TGriffinHit* grifHit;
-   TBgoHit* bgoHit;
+  TTigress *tigress = NULL;
+  TTigressHit *tigress_hit;
+  TGriffin* griffin = NULL;
+  TGriffinBgo* griffin_bgo = NULL;
+  TGriffinHit* griffin_hit;
+  TBgoHit* bgo_hit;
+  
+  int active_positions[] = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16}; //Full array
 
-   dataChain->SetBranchAddress("TGriffin", &fGrif);
-   dataChain->SetBranchAddress("TGriffinBgo", &fGriffinBgo);
-   // Must turn Cross-Talk correction off otherwise seg-fault
+  bool tig = true;
+  if (AnalysisTree->FindBranch("TTigress")) {
+    AnalysisTree->SetBranchAddress("TTigress", & tigress);
+     cout << "Generating TIGRESS" << endl;
+     tig = true;
+  } else {
+	  if (AnalysisTree->FindBranch("TGriffin")) {
+		AnalysisTree->SetBranchAddress("TGriffin", & griffin);
+		AnalysisTree->SetBranchAddress("TGriffinBgo", &griffin_bgo);
+		cout << "Generating GRIFFIN" << endl;
+		tig = false;
+	  } else {
+    cout << "No TTigress or TGriffin Branch Found. Things will go wrong..." << endl;
+    }
+  }
+
+  // Must turn Cross-Talk correction off otherwise seg-fault
    TGRSIOptions::AnalysisOptions()->SetCorrectCrossTalk(false);
 
-   cout << ":: Beginning sort" << endl;
-   int arrayLowerBound, arrayUpperBound;
-   int bgoNum, crystalNum;
-   for (int jEntry = 0; jEntry < (nEntries - 1); jEntry++){
-      dataChain->GetEntry(jEntry);
-      for (int i = 0; i < fGrif->GetMultiplicity(); i++){
-         grifHit = fGrif->GetGriffinHit(i);
-         // GRIFFIN-BGO
-         for (int j = 0; j < fGriffinBgo->GetMultiplicity(); j++){
-            bgoHit = fGriffinBgo->GetBgoHit(j);
-            crystalNum = grifHit->GetArrayNumber() - 1; // GetArrayNumber starts at 1
+  printf("Begin sort\n");
+  int arrayLowerBound, arrayUpperBound;
+  int bgoNum, crystalNum;
+  for (int jEntry = 0; jEntry < (nEntries - 1); jEntry++){
+    AnalysisTree->GetEntry(jEntry);
+    if(tig) {
+      for(int i = 0; i < tigress->GetMultiplicity(); i++){
+        if( tigress->GetMultiplicity() == tigress->GetBGOMultiplicity() && tigress->GetMultiplicity()==1){
+          tigress_hit = tigress->GetTigressHit(i);
+          int * ap = find(begin(active_positions), end(active_positions), tigress_hit->GetDetector()); 
+          if (ap != end(active_positions)) {  
+            bgo_hit = &tigress->GetBGO(i);
+            bgoNum = ((bgo_hit->GetDetector()-1)*4+bgo_hit->GetCrystal());
+            if(bgo_hit->GetCharge() > 15 && bgoNum == tigress_hit->GetArrayNumber()) {
+              GeBgoHP->Fill(bgo_hit->GetArrayNumber(), tigress_hit->GetArrayNumber());
+              gamma_singles[bgoNum][bgo_hit->GetSegment()-1]->Fill(tigress_hit->GetEnergy(),bgo_hit->GetCharge());
+	          }
+          }
+        }
+      }
+    } else {
+      for (int i = 0; i < griffin->GetMultiplicity(); i++){
+        griffin_hit = griffin->GetGriffinHit(i);
+        int * ap = find(begin(active_positions), end(active_positions), griffin_hit->GetDetector()); 
+        if (ap != end(active_positions)) {  
+          // GRIFFIN-BGO
+          for (int j = 0; j < griffin_bgo->GetMultiplicity(); j++){
+            bgo_hit = griffin_bgo->GetBgoHit(j);
+            crystalNum = griffin_hit->GetArrayNumber() - 1; // GetArrayNumber starts at 1
             arrayLowerBound = crystalNum * 5;
             arrayUpperBound = arrayLowerBound + 6;
-            bgoNum = bgoHit->GetArrayNumber() - arrayLowerBound - 1;
-            // only plot the BGO channels for the indivual crystals 
-            if (bgoHit->GetArrayNumber() > arrayLowerBound && bgoHit->GetArrayNumber() < arrayUpperBound){
-               griffinBgoHP->Fill(bgoHit->GetArrayNumber(), grifHit->GetArrayNumber());
-               //if (jEntry > 2500 && jEntry < 2600){
-               //   cout << "Entry: " << jEntry << endl;
-               //   cout << "Filling " << grifHit->GetEnergy() << ":" << bgoHit->GetCharge() << endl;
-               //}
-               gamma_singles[crystalNum][bgoNum]->Fill(grifHit->GetEnergy(), bgoHit->GetCharge());
+            bgoNum = bgo_hit->GetArrayNumber() - arrayLowerBound - 1;
+            // only plot the BGO channels for the individual crystals 
+            if (bgo_hit->GetArrayNumber() > arrayLowerBound && bgo_hit->GetArrayNumber() < arrayUpperBound){
+              GeBgoHP->Fill(bgo_hit->GetArrayNumber(), griffin_hit->GetArrayNumber() - 1);
+              gamma_singles[crystalNum][bgoNum]->Fill(griffin_hit->GetEnergy(), bgo_hit->GetCharge());
             }
-         }
+          }
+        }
       }
-      if (jEntry % 10000 == 0) cout << setiosflags(ios::fixed) << "GRIFFIN Entry " << jEntry << " of " << nEntries << ", " << 100 * jEntry / nEntries << "% complete" << "\r" << flush;
-   } // end jEntry
+    }
+    if (jEntry % 10000 == 0) cout << setiosflags(ios::fixed) << "GRIFFIN Entry " << jEntry << " of " << nEntries << ", " << 100 * jEntry / nEntries << "% complete" << "\r" << flush;
+  } // end jEntry
 
-   for (int i = 0; i < 64; i++){
-      for (int j = 0; j < 5; j++){
-         list->Add(gamma_singles[i][j]);
-      }
-   }
+  for (int i = 0; i < 64; i++){
+    for (int j = 0; j < 5; j++){
+      list->Add(gamma_singles[i][j]);
+    }
+  }
 
-   cout << "Entry " << nEntries << " of " << nEntries << ", 100% Complete!" << endl;
-   cout << ":: Sort complete, writing histograms." << endl;
+  cout << "Entry " << nEntries << " of " << nEntries << ", 100% Complete!" << endl;
+  cout << ":: Sort complete, writing histograms." << endl;
 
-   cout << "Writing histograms to file: " << outFile << endl;
-   TFile *myFile = new TFile(outFile, "RECREATE");
-   myFile->cd();
-   griffinBgoHP->Write();
-   list->Write();
-   myFile->Close();
+  cout << "Writing histograms to file: " << outFile << endl;
+  TFile *myFile = new TFile(outFile, "RECREATE");
+  myFile->cd();
+  GeBgoHP->Write();
+  list->Write();
+  myFile->Close();
    
 }// end GenerateHistograms
 
-/****************************************************************************
- * Prints usage message
- ***************************************************************************/
-void PrintUsage(char* argv[]){
-   std::cerr << argv[0] << "\n"
-             << "usage: " << argv[0] << "  analysis_tree calibration_file [out_file_name]\n"
-             << " analysis_tree:       analysis tree to process (must end with .root)\n"
-             << " calibration_file:    calibration file (must end with .cal)\n"
-             << " out_file_name:       optional, name of the output file\n"
-             << std::endl;
-} // end PrintUsage
-
-/****************************************************************************
- * Main
- ***************************************************************************/
 int main(int argc, char **argv){
    char const *inFile;
    char const *outFile;
    char const *calFile;
 
    if (argc == 1){
-      PrintUsage(argv);
+      cout << "Insufficient arguments." << endl;
+      cout << "./MakeBGOHistograms analysis_tree calibration_file [out_file_name]" << endl;
       return EXIT_FAILURE;
-   }
-   else if (argc == 3){
+   } if (argc == 2){
+      inFile = argv[1];
+      calFile = "CalibrationFile.cal";
+      outFile = "outFile.root";
+   } else if (argc == 3){
       inFile = argv[1];
       calFile = argv[2];
       outFile = "outFile.root";
+   } else if (argc == 4){
+      inFile = argv[1];
+      calFile = argv[2];
+      outFile = argv[3];
    }
    else{
-      PrintUsage(argv);
-      return EXIT_FAILURE;
+      cout << "Incorrect number of arguments" << endl;
    }
-
+   printf("Input file:%s\nCalibration file: %s\nOutput file: %s\n",inFile,calFile,outFile);
    GenerateHistograms(inFile, calFile, outFile);
    return EXIT_SUCCESS;
 } // end main

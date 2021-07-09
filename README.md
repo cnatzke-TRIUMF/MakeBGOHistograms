@@ -1,6 +1,6 @@
 # MakeBGOHistograms
 This project is designed to sort and histogram 137Cs source data from the
-GRIFFIN HPGe array at TRIUMF-ISAC for the purpose of voltage matching the BGO
+GRIFFIN or TIGRESS HPGe arrays at TRIUMF-ISAC for the purpose of voltage matching the BGO
 suppressor shields.
 
 ## Table of Contents
@@ -30,7 +30,7 @@ The general form of input is:
 ##### Parameters
 ```
 analysis_tree     The unpacked analysis tree containing 137Cs source data
-calibration_file  GRIFFIN calibration file
+calibration_file  GRIFFIN/TIGRESS calibration file
 out_file_name     optional, Name of output file
                   default: outFile.root
 ```
